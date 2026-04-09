@@ -16,7 +16,7 @@ app.use('/', authRoutes);
 
 // 404 处理
 app.use((req, res) => {
-    res.status(404).json({ error: '接口不存在' });
+    res.status(404).json({ code: -1, message: '接口不存在', data: null });
 });
 
 module.exports = app;

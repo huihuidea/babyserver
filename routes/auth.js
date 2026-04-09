@@ -7,21 +7,21 @@ router.post('/register', async (req, res) => {
     console.log('register request', req.body);
     const { username, password } = req.body;
     if (!username || !password) {
-        return res.status(400).json({ error: '用户名和密码不能为空' });
+        return res.status(400).json({ code: -1, message: '用户名和密码不能为空', data: null });
     }
     
     try {
         const existingUser = await User.findOne({ username });
         if (existingUser) {
-            return res.status(409).json({ error: '用户已存在' });
+            return res.status(409).json({ code: -1, message: '用户已存在', data: null });
         }
         
         const newUser = new User({ username, password });
         await newUser.save();
-        res.status(201).json({ code: 0, message: '注册成功' });
+        res.status(201).json({ code: 0, message: '注册成功', data: null });
     } catch (error) {
         console.error('注册失败:', error);
-        res.status(500).json({ error: '注册失败' });
+        res.status(500).json({ code: -1, message: '注册失败', data: null });
     }
 });
 
@@ -32,15 +32,15 @@ router.post('/login', async (req, res) => {
     try {
         const user = await User.findOne({ username });
         if (!user || user.password !== password) {
-            return res.status(401).json({ error: '用户名或密码错误' });
+            return res.status(401).json({ code: -1, message: '用户名或密码错误', data: null });
         }
         
         const token = generateToken();
         sessions.set(token, { username, loginAt: new Date() });
-        res.json({ message: '登录成功', token });
+        res.json({ code: 0, message: '登录成功', data: { token } });
     } catch (error) {
         console.error('登录失败:', error);
-        res.status(500).json({ error: '登录失败' });
+        res.status(500).json({ code: -1, message: '登录失败', data: null });
     }
 });
 
@@ -49,16 +49,16 @@ router.get('/profile', (req, res) => {
     const token = authHeader && authHeader.split(' ')[1];
     const session = sessions.get(token);
     if (!session) {
-        return res.status(401).json({ error: '未登录或token无效' });
+        return res.status(401).json({ code: -1, message: '未登录或token无效', data: null });
     }
-    res.json({ username: session.username, loginAt: session.loginAt });
+    res.json({ code: 0, message: '获取成功', data: { username: session.username, loginAt: session.loginAt } });
 });
 
 router.post('/logout', (req, res) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
     if (token) sessions.delete(token);
-    res.json({ message: '退出成功' });
+    res.json({ code: 0, message: '退出成功', data: null });
 });
 
 module.exports = router;
