@@ -5,7 +5,15 @@ const { sessions, generateToken } = require('../middleware/session');
 
 router.post('/register', async (req, res) => {
     console.log('register request', req.body);
-    const { username, password } = req.body;
+    const {
+        username,
+        password,
+        gender = '',
+        avatar = '',
+        vip = {},
+        address = '',
+        email = ''
+    } = req.body;
     if (!username || !password) {
         return res.status(400).json({ code: -1, message: '用户名和密码不能为空', data: null });
     }
@@ -16,7 +24,15 @@ router.post('/register', async (req, res) => {
             return res.status(409).json({ code: -1, message: '用户已存在', data: null });
         }
         
-        const newUser = new User({ username, password });
+        const newUser = new User({
+            username,
+            password,
+            gender,
+            avatar,
+            vip,
+            address,
+            email
+        });
         await newUser.save();
         res.status(201).json({ code: 0, message: '注册成功', data: null });
     } catch (error) {
@@ -37,28 +53,87 @@ router.post('/login', async (req, res) => {
         
         const token = generateToken();
         sessions.set(token, { username, loginAt: new Date() });
-        res.json({ code: 0, message: '登录成功', data: { token } });
+        user.token = token;
+        await user.save();
+
+        res.json({
+            code: 0,
+            message: '登录成功',
+            data: {
+                token,
+                userInfo: {
+                    username: user.username,
+                    gender: user.gender,
+                    avatar: user.avatar,
+                    vip: user.vip,
+                    address: user.address,
+                    email: user.email,
+                    createdAt: user.createdAt
+                }
+            }
+        });
     } catch (error) {
         console.error('登录失败:', error);
         res.status(500).json({ code: -1, message: '登录失败', data: null });
     }
 });
 
-router.get('/profile', (req, res) => {
+router.get('/profile', async (req, res) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
     const session = sessions.get(token);
     if (!session) {
         return res.status(401).json({ code: -1, message: '未登录或token无效', data: null });
     }
-    res.json({ code: 0, message: '获取成功', data: { username: session.username, loginAt: session.loginAt } });
+
+    try {
+        const user = await User.findOne({ username: session.username });
+        if (!user) {
+            return res.status(404).json({ code: -1, message: '用户不存在', data: null });
+        }
+
+        res.json({
+            code: 0,
+            message: '获取成功',
+            data: {
+                username: user.username,
+                gender: user.gender,
+                avatar: user.avatar,
+                vip: user.vip,
+                token: user.token,
+                address: user.address,
+                email: user.email,
+                loginAt: session.loginAt,
+                createdAt: user.createdAt
+            }
+        });
+    } catch (error) {
+        console.error('获取用户信息失败:', error);
+        res.status(500).json({ code: -1, message: '获取用户信息失败', data: null });
+    }
 });
 
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
-    if (token) sessions.delete(token);
-    res.json({ code: 0, message: '退出成功', data: null });
+
+    try {
+        if (token) {
+            const session = sessions.get(token);
+            if (session) {
+                await User.findOneAndUpdate(
+                    { username: session.username },
+                    { token: '' }
+                );
+            }
+            sessions.delete(token);
+        }
+
+        res.json({ code: 0, message: '退出成功', data: null });
+    } catch (error) {
+        console.error('退出失败:', error);
+        res.status(500).json({ code: -1, message: '退出失败', data: null });
+    }
 });
 
 module.exports = router;
