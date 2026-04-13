@@ -52,7 +52,7 @@ router.post('/login', async (req, res) => {
         }
         
         const token = generateToken();
-        sessions.set(token, { username, loginAt: new Date() });
+        sessions.set(token, { userId: user.id, username: user.username, loginAt: new Date() });
         user.token = token;
         await user.save();
 
@@ -62,6 +62,7 @@ router.post('/login', async (req, res) => {
             data: {
                 token,
                 userInfo: {
+                    id: user.id,
                     username: user.username,
                     gender: user.gender,
                     avatar: user.avatar,
@@ -87,7 +88,7 @@ router.get('/profile', async (req, res) => {
     }
 
     try {
-        const user = await User.findOne({ username: session.username });
+        const user = await User.findOne({ id: session.userId });
         if (!user) {
             return res.status(404).json({ code: -1, message: '用户不存在', data: null });
         }
@@ -96,6 +97,7 @@ router.get('/profile', async (req, res) => {
             code: 0,
             message: '获取成功',
             data: {
+                id: user.id,
                 username: user.username,
                 gender: user.gender,
                 avatar: user.avatar,
@@ -122,7 +124,7 @@ router.post('/logout', async (req, res) => {
             const session = sessions.get(token);
             if (session) {
                 await User.findOneAndUpdate(
-                    { username: session.username },
+                    { id: session.userId },
                     { token: '' }
                 );
             }

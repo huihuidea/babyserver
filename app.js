@@ -12,7 +12,9 @@ app.use((req, res, next) => {
 
 // 路由
 const authRoutes = require('./routes/auth');
+const feedbackRoutes = require('./routes/feedback');
 app.use('/', authRoutes);
+app.use('/', feedbackRoutes);
 
 // 404 处理
 app.use((req, res) => {
