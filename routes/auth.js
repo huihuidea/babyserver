@@ -3,6 +3,34 @@ const router = express.Router();
 const User = require('../models/User');
 const { sessions, generateToken } = require('../middleware/session');
 
+async function getCurrentUser(req) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    const session = sessions.get(token);
+
+    if (!session) {
+        return { token, session: null, user: null };
+    }
+
+    const user = await User.findOne({ id: session.userId });
+    return { token, session, user };
+}
+
+function buildUserProfile(user, session) {
+    return {
+        id: user.id,
+        username: user.username,
+        gender: user.gender,
+        avatar: user.avatar,
+        vip: user.vip,
+        token: user.token,
+        address: user.address,
+        email: user.email,
+        loginAt: session ? session.loginAt : null,
+        createdAt: user.createdAt
+    };
+}
+
 router.post('/register', async (req, res) => {
     console.log('register request', req.body);
     const {
@@ -61,16 +89,7 @@ router.post('/login', async (req, res) => {
             message: '登录成功',
             data: {
                 token,
-                userInfo: {
-                    id: user.id,
-                    username: user.username,
-                    gender: user.gender,
-                    avatar: user.avatar,
-                    vip: user.vip,
-                    address: user.address,
-                    email: user.email,
-                    createdAt: user.createdAt
-                }
+                userInfo: buildUserProfile(user, sessions.get(token))
             }
         });
     } catch (error) {
@@ -80,15 +99,12 @@ router.post('/login', async (req, res) => {
 });
 
 router.get('/profile', async (req, res) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    const session = sessions.get(token);
-    if (!session) {
-        return res.status(401).json({ code: -1, message: '未登录或token无效', data: null });
-    }
-
     try {
-        const user = await User.findOne({ id: session.userId });
+        const { session, user } = await getCurrentUser(req);
+        if (!session) {
+            return res.status(401).json({ code: -1, message: '未登录或token无效', data: null });
+        }
+
         if (!user) {
             return res.status(404).json({ code: -1, message: '用户不存在', data: null });
         }
@@ -96,22 +112,72 @@ router.get('/profile', async (req, res) => {
         res.json({
             code: 0,
             message: '获取成功',
-            data: {
-                id: user.id,
-                username: user.username,
-                gender: user.gender,
-                avatar: user.avatar,
-                vip: user.vip,
-                token: user.token,
-                address: user.address,
-                email: user.email,
-                loginAt: session.loginAt,
-                createdAt: user.createdAt
-            }
+            data: buildUserProfile(user, session)
         });
     } catch (error) {
         console.error('获取用户信息失败:', error);
         res.status(500).json({ code: -1, message: '获取用户信息失败', data: null });
+    }
+});
+
+router.patch('/profile', async (req, res) => {
+    try {
+        const { session, user } = await getCurrentUser(req);
+        if (!session) {
+            return res.status(401).json({ code: -1, message: '未登录或token无效', data: null });
+        }
+
+        if (!user) {
+            return res.status(404).json({ code: -1, message: '用户不存在', data: null });
+        }
+
+        const allowedFields = ['username', 'password', 'gender', 'avatar', 'vip', 'address', 'email'];
+        const updates = {};
+
+        allowedFields.forEach((field) => {
+            if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+                updates[field] = req.body[field];
+            }
+        });
+
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({ code: -1, message: '没有可更新的字段', data: null });
+        }
+
+        if (Object.prototype.hasOwnProperty.call(updates, 'username')) {
+            if (!updates.username) {
+                return res.status(400).json({ code: -1, message: '用户名不能为空', data: null });
+            }
+
+            const existingUser = await User.findOne({ username: updates.username, id: { $ne: user.id } });
+            if (existingUser) {
+                return res.status(409).json({ code: -1, message: '用户名已存在', data: null });
+            }
+        }
+
+        if (Object.prototype.hasOwnProperty.call(updates, 'password') && !updates.password) {
+            return res.status(400).json({ code: -1, message: '密码不能为空', data: null });
+        }
+
+        if (Object.prototype.hasOwnProperty.call(updates, 'vip') && (typeof updates.vip !== 'object' || updates.vip === null || Array.isArray(updates.vip))) {
+            return res.status(400).json({ code: -1, message: 'vip必须是对象', data: null });
+        }
+
+        Object.assign(user, updates);
+        await user.save();
+
+        if (updates.username) {
+            session.username = user.username;
+        }
+
+        res.json({
+            code: 0,
+            message: '修改成功',
+            data: buildUserProfile(user, session)
+        });
+    } catch (error) {
+        console.error('修改用户信息失败:', error);
+        res.status(500).json({ code: -1, message: '修改用户信息失败', data: null });
     }
 });
 
