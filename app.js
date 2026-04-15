@@ -2,7 +2,7 @@ const express = require('express');
 const app = express();
 
 // 中间件
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -13,8 +13,11 @@ app.use((req, res, next) => {
 // 路由
 const authRoutes = require('./routes/auth');
 const feedbackRoutes = require('./routes/feedback');
+const communityRoutes = require('./routes/community');
 app.use('/', authRoutes);
 app.use('/', feedbackRoutes);
+app.use('/community', communityRoutes);
+app.use('/commity', communityRoutes);
 
 // 404 处理
 app.use((req, res) => {
